@@ -4,112 +4,175 @@ import numpy as np
 import random
 import matplotlib.colors as mcolors
 from faker import Faker
+import pygame
+import random
 
 class Character:
-    _id_counter = 1  # Class variable to assign unique IDs
+    def __init__(self, name):
+        self.name = name
+        total_stats = 15
+        self.strength = random.randint(1, total_stats - 2)
+        remaining_stats = total_stats - self.strength
+        self.agility = random.randint(1, remaining_stats - 1)
+        self.intelligence = remaining_stats - self.agility
+        self.color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
 
-    def __init__(self):
-        self.id = Character._id_counter
-        Character._id_counter += 1
-        self.attack = 1
-        self.health = 5
-        self.movement_speed = 1
-        self.attack_speed = 1
-        self.experience = 0
-        self.level = 1
-        self.color = random.choice(list(mcolors.CSS4_COLORS.keys()))  # Assign a random color
-        self.position = None
-        self.name = Faker().name()  # Generate a random name using Faker
+    def __repr__(self):
+        return f"{self.name} (S: {self.strength}, A: {self.agility}, I: {self.intelligence})"
 
-    def move(self, size):
-        directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
-        dx, dy = random.choice(directions)
-        new_position = (self.position[0] + dx, self.position[1] + dy)
-        
-        # Check if the new position is within the grid boundaries
-        if 0 <= new_position[0] < size and 0 <= new_position[1] < size:
-            self.position = new_position
-        # Else, do nothing (character stays in the same position)
+def generate_characters(num_characters=64):
+    characters = []
+    fake = Faker()
+    for _ in range(num_characters):
+        name = fake.name()
+        character = Character(name)
+        characters.append(character)
+    return characters
 
-class Game:
-    def __init__(self, size):
-        self.size = size
-        self.grid = np.zeros((size, size))
-        self.characters = []
-        self.current_frame = 0  # Added to track the current frame
-        self.color_map = {char.id: char.color for char in self.characters}
-        # Automatically create and add characters
-        for _ in range(size):
-            character = Character()
-            while True:
-                position = (random.randint(0, size-1), random.randint(0, size-1))
-                if self.grid[position] == 0:
-                    self.add_character(character, position)
-                    break
+def calculate_win_probability(character, opponent):
+    # Higher stats increase the win probability, but the difference matters
+    strength_advantage = character.strength - opponent.agility
+    agility_advantage = character.agility - opponent.intelligence
+    intelligence_advantage = character.intelligence - opponent.strength
 
-    def add_character(self, character, position):
-        self.characters.append(character)
-        character.position = position
-        self.grid[position] = len(self.characters)
+    # Base win probability
+    win_probability = 0.5
 
-    def next_frame(self):
-        self.current_frame += 1
-        new_grid = np.zeros_like(self.grid)  # Create a new grid for this frame
-        position_to_character = {char.position: char for char in self.characters}  # Map positions to characters
+    # Adjust win probability based on stat advantages
+    win_probability += strength_advantage * 0.05
+    win_probability += agility_advantage * 0.05
+    win_probability += intelligence_advantage * 0.05
 
-        characters_to_remove = set()
-        removed_character_names = []  # List to store the names of removed characters
+    # Ensure probability is within 0-1 range
+    win_probability = max(0, min(win_probability, 1))
 
-        for character in self.characters:
-            old_position = character.position
-            character.move(self.size)
+    return win_probability
 
-            # Check for character interactions
-            other = position_to_character.get(character.position)
-            if other and other != character:
-                other.health -= character.attack
-                if other.health <= 0:
-                    characters_to_remove.add(other)
-                    removed_character_names.append(other.name)  # Add the name of the removed character
+def increase_winner_stats(winner):
+    # Randomly choose which stat to increase
+    stat_to_increase = random.choice(['strength', 'agility', 'intelligence'])
 
-            # Update the new grid with the character's new position
-            if character not in characters_to_remove:
-                new_grid[character.position] = self.characters.index(character) + 1
+    # Determine the increase amount (between 1 and 4)
+    increase_amount = random.randint(1, 4)
 
-        # Remove characters marked for removal
-        for char in characters_to_remove:
-            self.color_map.pop(char.id, None)
-        self.characters = [char for char in self.characters if char not in characters_to_remove]
-        self.grid = new_grid  # Update the main grid with the new grid
+    # Increase the chosen stat
+    if stat_to_increase == 'strength':
+        winner.strength += increase_amount
+    elif stat_to_increase == 'agility':
+        winner.agility += increase_amount
+    else:
+        winner.intelligence += increase_amount
 
-        # Print the names of removed characters
-        for name in removed_character_names:
-            print(f"Character {name} has been removed.")
-    def draw(self):
-        # Create a color map from the character colors
-        cmap = ['white'] + [self.color_map[char.id] for char in self.characters]
-        cmap = plt.cm.colors.ListedColormap(cmap)        
-        plt.imshow(self.grid, cmap=cmap)
-        plt.show()
+    return winner
 
-# Create a game
-game = Game(11)
+def simulate_match(character1, character2):
+    win_probability_1 = calculate_win_probability(character1, character2)
+    win_probability_2 = calculate_win_probability(character2, character1)
 
-# Create a figure for the plot
-fig, ax = plt.subplots()
+    # Simulate the match based on win probabilities
+    if random.random() < win_probability_1:
+        winner = character1
+    else:
+        winner = character2
 
-# Global variable to keep track of the current frame number
-current_frame = 0
+    winner = increase_winner_stats(winner)
+
+    match_result = f"{character1.name} vs {character2.name}: {winner.name} Wins"
+    return winner, match_result
+
+def tournament_round(characters):
+    winners = []
+    match_results = []
+    for i in range(0, len(characters), 2):
+        character1 = characters[i]
+        character2 = characters[i + 1]
+        winner, result = simulate_match(character1, character2)
+        winners.append(winner)
+        match_results.append(result)
+        print(f"{character1.name} vs {character2.name}: {winner.name} Wins")
+    return winners, match_results
+
+def run_tournament(characters):
+    rounds = [characters.copy()]
+    all_match_results = []
+    while len(characters) > 1:
+        characters, match_results = tournament_round(characters)
+        rounds.append(characters)
+        all_match_results.extend(match_results)
+    return rounds, all_match_results
+
+def draw_character(window, character, position):
+    font = pygame.font.SysFont(None, 24)
+    text = font.render(f"{character.name} (S: {character.strength}, A: {character.agility}, I: {character.intelligence})", True, (255, 255, 255))
+    window.blit(text, position)
+
+def draw_line(window, start_pos, end_pos, color=(255, 255, 255), thickness=2):
+    pygame.draw.line(window, color, start_pos, end_pos, thickness)
+
+def draw_bracket(window, rounds, current_round, window_width, window_height):
+    max_characters = max(len(round_chars) for round_chars in rounds)
+    square_size = window_width // (max_characters * 1.01)  # Adjust for space between squares
+    square_size = min(square_size, window_height // len(rounds))  # Ensure squares fit vertically
+    spacing = square_size // 10
+
+    # Dictionary to store x-positions of characters
+    x_positions = {}
+
+    for round_index, round_characters in enumerate(rounds):
+        if round_index > current_round:
+            break
+
+        y_position = round_index * (square_size + spacing)
+
+        for i, character in enumerate(round_characters):
+            if round_index == 0:
+                x_position = i * (square_size + spacing)
+            else:
+                # Find the x-positions of the two characters that the winner defeated
+                prev_round_index = (i * 2, i * 2 + 1)
+                prev_x_positions = [x_positions[round_index - 1][index] for index in prev_round_index]
+                x_position = sum(prev_x_positions) // 2  # Place in the middle of the two competitors
+
+            x_positions.setdefault(round_index, {})[i] = x_position  # Store x-position
+            pygame.draw.rect(window, character.color, (x_position, y_position, square_size, square_size))
+
+    # Special handling for the final winner
+    if current_round == len(rounds) - 1 and len(rounds[-1]) == 1:
+        winner = rounds[-1][0]
+        winner_text = f"Winner: {winner.name}"
+        font = pygame.font.SysFont(None, 30)
+        text_surface = font.render(winner_text, True, (255, 215, 0))
+        window.blit(text_surface, (10, window_height - text_surface.get_height() - 10))
+
+    pygame.display.flip()
 
 
-# Function to update the plot
-def update(num):
-    ax.clear()
-    game.next_frame()
-    cmap = plt.cm.colors.ListedColormap(['white'] + [character.color for character in game.characters])
-    ax.imshow(game.grid, cmap=cmap, interpolation='nearest')  # Use nearest interpolation for clearer visuals
-    plt.text(0.95, 0.05, f'Frame: {game.current_frame}', horizontalalignment='right', verticalalignment='bottom', transform=ax.transAxes, color='black')
+def main():
+    # Initialize Pygame
+    pygame.init()
+    window_width = 1280
+    window_height = 720
+    window = pygame.display.set_mode((window_width, window_height))
+    pygame.display.set_caption("Tournament Game")
 
-# Option 1: Specify a save_count
-ani = FuncAnimation(fig, update, frames=None, interval=200, repeat=True, cache_frame_data=False)
-plt.show()
+    characters = generate_characters()
+    tournament_rounds, match_results = run_tournament(characters)  # Get rounds and match results
+    current_round = 0
+
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE and current_round < len(tournament_rounds) - 1:
+                    current_round += 1
+
+        window.fill((0, 0, 0))
+        draw_bracket(window, tournament_rounds, current_round, window_width, window_height)  # Update this line
+        pygame.display.flip()
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
