@@ -122,6 +122,27 @@ def apply_subclass_ability(character, opponent):
             opponent.health -= 10  # Ongoing damage
     # Reset increased stats after each round if necessary
 
+def draw_combat_scene(window, character1, character2, window_width, window_height):
+    font = pygame.font.SysFont(None, 24)
+    
+    # Draw characters
+    char1_text = font.render(f"{character1.name}", True, character1.color)
+    char2_text = font.render(f"{character2.name}", True, character2.color)
+    window.blit(char1_text, (100, window_height // 2))
+    window.blit(char2_text, (window_width - 200, window_height // 2))
+
+    # Draw health bars
+    max_health_width = 200  # Max width of the health bar
+    health_bar_height = 20
+    char1_health_ratio = character1.health / 100
+    char2_health_ratio = character2.health / 100
+
+    char1_health_bar = (100, window_height // 2 + 30, max_health_width * char1_health_ratio, health_bar_height)
+    char2_health_bar = (window_width - 200, window_height // 2 + 30, max_health_width * char2_health_ratio, health_bar_height)
+
+    pygame.draw.rect(window, (255, 0, 0), char1_health_bar)  # Red health bar
+    pygame.draw.rect(window, (255, 0, 0), char2_health_bar)
+
 def simulate_match(character1, character2):
     env_factor = random.choice(['Rainy', 'Sunny', 'Windy'])
     apply_subclass_ability(character1, character2)
@@ -257,6 +278,8 @@ def main():
     characters = generate_characters()
     tournament_rounds, match_results = run_tournament(characters)  # Get rounds and match results
     current_round = 0
+    show_combat = False  # Flag to toggle between bracket view and combat view
+    combat_match_index = 0  # Index to track the combat match being displayed
 
     running = True
     while running:
@@ -264,14 +287,30 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE and current_round < len(tournament_rounds) - 1:
-                    current_round += 1
+                if event.key == pygame.K_SPACE:
+                    # Toggle between bracket view and combat view
+                    show_combat = not show_combat
+                    if not show_combat:
+                        # Move to next round when returning to bracket view
+                        current_round = min(current_round + 1, len(tournament_rounds) - 1)
+                        combat_match_index = 0  # Reset combat match index
 
         window.fill((0, 0, 0))
-        draw_bracket(window, tournament_rounds, current_round, window_width, window_height)  # Update this line
+
+        if show_combat and combat_match_index < len(tournament_rounds[current_round]) // 2:
+            # Display combat scene for the current match
+            char1 = tournament_rounds[current_round][combat_match_index * 2]
+            char2 = tournament_rounds[current_round][combat_match_index * 2 + 1]
+            draw_combat_scene(window, char1, char2, window_width, window_height)
+            combat_match_index += 1  # Move to the next match after displaying current one
+        else:
+            # Display the tournament bracket
+            draw_bracket(window, tournament_rounds, current_round, window_width, window_height)
+
         pygame.display.flip()
 
     pygame.quit()
+
 
 if __name__ == "__main__":
     main()
